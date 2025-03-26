@@ -112,6 +112,19 @@ pub fn get_packed_type(message: &Message) -> PackedType {
     }
 }
 
+pub fn get_topic_id(message: &Message) -> Option<i32> {
+    match message.reply_header() {
+        Some(tl::enums::MessageReplyHeader::Header(header)) => {
+            if header.forum_topic && header.reply_to_top_id.is_some() {
+                header.reply_to_top_id
+            } else {
+                header.reply_to_msg_id
+            }
+        }
+        _ => None,
+    }
+}
+
 pub fn is_raw_photo(document: &Document) -> bool {
     match document.raw.document.as_ref() {
         Some(tl::enums::Document::Document(d)) => {

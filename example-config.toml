@@ -4,6 +4,7 @@ api_id = 22222
 api_hash = "33333"
 bot_token = "44444"
 proxy_url = "socks5://locahost:7891"
+enable_search = false
 
 [onebot]
 addr = "0.0.0.0:12345"

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
+use std::fmt::Write;
 
 use anyhow::Result;
+use chrono::{Local, TimeZone};
 use grammers_client::types::{CallbackQuery, Chat, Message};
 use grammers_client::{InputMessage, button, reply_markup};
 use grammers_tl_types as tl;
@@ -11,7 +13,9 @@ use super::{entities, telegram_helper as tg_helper};
 use crate::TelegramPylon;
 use crate::common::{ChatType, Endpoint};
 
+// 分页大小
 const PAGE_SIZE: u64 = 10;
+// 占位符
 const PLACE_HOLDER: &str = "porter";
 
 impl TelegramPylon {
@@ -24,14 +28,19 @@ impl TelegramPylon {
                 "archive" => match command_callback.action.as_str() {
                     "create" => Self::create_archive(bridge, &message, &command_callback).await?,
                     "delete" => Self::delete_archive(bridge, &message, &command_callback).await?,
-                    "cancel" => Self::cancel_archive(bridge, &message, &command_callback).await?,
+                    "cancel" => Self::cancel(bridge, &message, &command_callback).await?,
                     _ => {}
                 },
                 "link" => match command_callback.action.as_str() {
                     "create" => Self::create_link(bridge, &message, &command_callback).await?,
                     "delete" => Self::delete_link(bridge, &message, &command_callback).await?,
                     "list" => Self::list_link(bridge, &message, &command_callback).await?,
-                    "cancel" => Self::cancel_link(bridge, &message, &command_callback).await?,
+                    "cancel" => Self::cancel(bridge, &message, &command_callback).await?,
+                    _ => {}
+                },
+                "search" => match command_callback.action.as_str() {
+                    "list" => Self::list_search(bridge, &message, &command_callback).await?,
+                    "cancel" => Self::cancel(bridge, &message, &command_callback).await?,
                     _ => {}
                 },
                 _ => {}
@@ -52,7 +61,8 @@ impl TelegramPylon {
                     .respond(InputMessage::html(
                         "help - Show command list.\n\
                         link - Manage remote chat link.\n\
-                        archive - Archive remote chat.",
+                        archive - Archive remote chat.\n\
+                        search - search messages.",
                     ))
                     .await?;
             }
@@ -65,9 +75,12 @@ impl TelegramPylon {
                     }
                 }
                 message
-                    .respond(InputMessage::html(
-                        "<b>Currently, archive is only supported in forum groups</b>",
-                    ))
+                    .respond(
+                        InputMessage::html(
+                            "<b>Currently, archive is only supported in forum groups</b>",
+                        )
+                        .reply_to(tg_helper::get_topic_id(message)),
+                    )
                     .await?;
             }
             "/link" => {
@@ -89,6 +102,23 @@ impl TelegramPylon {
                     .respond(InputMessage::html(
                         "<b>Currently, link creation is only supported in regular groups</b>",
                     ))
+                    .await?;
+            }
+            "/search" => {
+                if let Chat::Group(group) = message.chat() {
+                    if let tl::enums::Chat::Channel(channel) = group.raw {
+                        if channel.megagroup {
+                            return Self::process_search(bridge, message).await;
+                        }
+                    }
+                }
+                message
+                    .respond(
+                        InputMessage::html(
+                            "<b>Currently, search is only supported in mega groups</b>",
+                        )
+                        .reply_to(tg_helper::get_topic_id(message)),
+                    )
                     .await?;
             }
             _ => {
@@ -136,12 +166,6 @@ impl TelegramPylon {
         }
 
         Self::list_archive(bridge, message).await
-    }
-
-    async fn cancel_archive(_: &Bridge, message: &Message, _: &CommandCallback) -> Result<()> {
-        Ok(message
-            .edit(InputMessage::html("<del>Cancelled by the user</del>"))
-            .await?)
     }
 
     async fn list_archive(bridge: &Bridge, message: &Message) -> Result<()> {
@@ -209,7 +233,11 @@ impl TelegramPylon {
                 .await?;
         } else {
             message
-                .respond(InputMessage::text(content).reply_markup(&reply_markup::inline(markup)))
+                .respond(
+                    InputMessage::text(content)
+                        .reply_to(tg_helper::get_topic_id(message))
+                        .reply_markup(&reply_markup::inline(markup)),
+                )
                 .await?;
         }
 
@@ -266,12 +294,6 @@ impl TelegramPylon {
         }
 
         Self::list_link(bridge, message, callback).await
-    }
-
-    async fn cancel_link(_: &Bridge, message: &Message, _: &CommandCallback) -> Result<()> {
-        Ok(message
-            .edit(InputMessage::html("<del>Cancelled by the user</del>"))
-            .await?)
     }
 
     async fn list_link(
@@ -403,5 +425,119 @@ impl TelegramPylon {
         }
 
         Ok(())
+    }
+
+    async fn process_search(bridge: &Bridge, message: &Message) -> Result<()> {
+        let callback = CommandCallback::new(
+            "search",
+            "list",
+            0,
+            message.text()[7..].trim().to_owned(),
+            String::new(),
+        );
+
+        Self::list_search(bridge, message, &callback).await
+    }
+
+    async fn list_search(
+        bridge: &Bridge,
+        message: &Message,
+        callback: &CommandCallback,
+    ) -> Result<()> {
+        let page = callback.page;
+        let keyword = callback.keyword.clone();
+
+        // 检查关键词是否为空
+        if callback.keyword.is_empty() {
+            message
+                .respond(
+                    InputMessage::html("<b>Please input a keyword</b>")
+                        .reply_to(tg_helper::get_topic_id(message)),
+                )
+                .await?;
+            return Ok(());
+        }
+
+        let chat_id = message.chat().id();
+        let last_id = match callback.data.is_empty() {
+            true => None,
+            false => match callback.data.parse::<i32>() {
+                Ok(id) => Some(id),
+                Err(_) => None,
+            },
+        };
+        let reply_to = tg_helper::get_topic_id(message);
+        let result = bridge
+            .search_messages(
+                message.chat().id(),
+                reply_to,
+                &callback.keyword,
+                last_id,
+                PAGE_SIZE,
+            )
+            .await?;
+
+        let mut content = String::new();
+        for (message_id, timestamp, sinppet) in &result {
+            let link = match reply_to {
+                Some(reply_to) => format!("https://t.me/c/{}/{}/{}", chat_id, reply_to, message_id),
+                None => format!("https://t.me/c/{}/{}", chat_id, message_id),
+            };
+
+            write!(
+                &mut content,
+                "{}\n<blockquote>[{}]\n{}</blockquote>",
+                link,
+                Local.timestamp_opt(*timestamp, 0).unwrap(),
+                sinppet
+            )?;
+        }
+
+        // 如果无返回, 填充文本 (Telegram无法发送空消息)
+        if content.is_empty() {
+            content = "<blockquote>Have reached the edge of the world.</blockquote>".to_string();
+        }
+
+        // 构建分页按钮
+        let mut markup = Vec::new();
+        let mut bottom = Vec::new();
+        {
+            let cb = CommandCallback::new("search", "cancel", page, keyword.clone(), String::new());
+            bottom.push(button::inline("Cancel", bridge.put_callback(&cb)));
+        }
+        if result.len() == (PAGE_SIZE as usize) {
+            let cb = CommandCallback::new(
+                "search",
+                "list",
+                page,
+                keyword.clone(),
+                result.last().unwrap().0.to_string(),
+            );
+            bottom.push(button::inline("Next >", bridge.put_callback(&cb)));
+        }
+        markup.push(bottom);
+
+        // 如果源消息是Bot发送的，直接编辑源消息, 否则回复一条新消息
+        if message.outgoing() {
+            message
+                .edit(InputMessage::html(content).reply_markup(&reply_markup::inline(markup)))
+                .await?;
+        } else {
+            message
+                .respond(
+                    InputMessage::html(content)
+                        .reply_to(reply_to)
+                        .reply_markup(&reply_markup::inline(markup)),
+                )
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn cancel(_: &Bridge, message: &Message, _: &CommandCallback) -> Result<()> {
+        Ok(message
+            .edit(InputMessage::html("<del>Cancelled by the user</del>"))
+            .await?)
     }
 }

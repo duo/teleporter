@@ -16,6 +16,7 @@ use crate::telegram::telegram_helper as tg_helper;
 use crate::with_id_lock;
 
 use super::bridge::RelayBridge;
+use super::index_service::IndexService;
 use super::migration;
 
 const DB_FILE: &str = "porter.db";
@@ -30,6 +31,7 @@ pub struct TelegramPylon {
     admin_id: i64,
     client: Client,
     db: DatabaseConnection,
+    index: Option<IndexService>,
 }
 
 impl TelegramPylon {
@@ -75,6 +77,10 @@ impl TelegramPylon {
             admin_id: config.admin_id,
             client,
             db,
+            index: match config.enable_search {
+                true => Some(IndexService::new().await?),
+                false => None,
+            },
         })
     }
 
@@ -90,6 +96,7 @@ impl TelegramPylon {
             self.admin_id,
             self.client.clone(),
             self.db.clone(),
+            self.index.clone(),
             api_sender,
         ));
 
@@ -141,7 +148,7 @@ impl TelegramPylon {
     ) -> Result<()> {
         match bridge.bot_client.next_update().await? {
             Update::NewMessage(message) => {
-                tracing::info!("Receive Telegram new message: {:?}", message);
+                tracing::debug!("Receive Telegram new message: {:?}", message);
 
                 tokio::spawn(async move {
                     with_id_lock!(tg_id_lock, message.chat().id(), {

@@ -24,6 +24,7 @@ use sea_orm::{
 };
 use tokio::sync::{Mutex, mpsc};
 
+use super::index_service::IndexService;
 use super::{entities, onebot_helper as ob_helper};
 use crate::common::{ChatType, DeliveryStatus, Endpoint, Platform, RemoteChatKey};
 use crate::onebot::onebot_pylon::OnebotPylon;
@@ -85,6 +86,7 @@ pub struct Bridge {
     pub admin_id: i64,
     pub bot_client: Client,
     pub db: DatabaseConnection,
+    index: Option<IndexService>,
     api_sender: mpsc::Sender<OnebotRequest>,
 
     remote_chat_cache: DashMap<RemoteChatKey, Arc<ChatModel>>,
@@ -283,12 +285,14 @@ impl Bridge {
         admin_id: i64,
         bot_client: Client,
         db: DatabaseConnection,
+        index: Option<IndexService>,
         api_sender: mpsc::Sender<OnebotRequest>,
     ) -> Self {
         Self {
             admin_id,
             bot_client,
             db,
+            index,
             api_sender,
             remote_chat_cache: DashMap::new(),
             callback_cache: DashMap::new(),
@@ -326,6 +330,7 @@ impl Bridge {
         Ok(self.bot_client.send_album(chat, medias).await?)
     }
 
+    // 将Onebot消息段的媒体下载到本地后上传到Telegram
     pub async fn upload_segment(
         &self,
         endpoint: &Endpoint,
@@ -688,6 +693,7 @@ impl Bridge {
         self.callback_cache.remove(hash).map(|(_, v)| v)
     }
 
+    // 下载Telegram的媒体文件
     pub async fn download_media(
         &self,
         media: &grammers_client::types::Media,
@@ -712,6 +718,32 @@ impl Bridge {
         Ok((file_name, file_bytes))
     }
 
+    pub async fn index_message(&self, message: &Message) -> Result<()> {
+        if let Some(index) = &self.index {
+            index.index_message(message).await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn search_messages(
+        &self,
+        chat_id: i64,
+        reply_to: Option<i32>,
+        keyword: &str,
+        last_id: Option<i32>,
+        page_size: u64,
+    ) -> Result<Vec<(i32, i64, String)>> {
+        match &self.index {
+            Some(index) => {
+                index
+                    .search_messages(chat_id, reply_to, keyword, last_id, page_size)
+                    .await
+            }
+            None => Ok(Vec::new()),
+        }
+    }
+
     async fn create_topic(
         &self,
         archive_id: i64,
@@ -729,6 +761,7 @@ impl Bridge {
         Ok(())
     }
 
+    // 下载Onebot的消息段里的媒体
     async fn download_segment(
         &self,
         endpoint: &Endpoint,

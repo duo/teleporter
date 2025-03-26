@@ -288,7 +288,8 @@ impl TelegramPylon {
                     .find_message_by_tg(message.chat().id(), message_id)
                     .await?
                 {
-                    segments.push(Segment::Reply(Segment::reply(message.remote_msg_id)));
+                    // QQ如果Reply不是第一个消息段的话, 会往消息末尾添加@
+                    segments.insert(0, Segment::Reply(Segment::reply(message.remote_msg_id)));
                 }
             }
 

@@ -382,8 +382,12 @@ impl TelegramPylon {
 
         tracing::debug!("Send to telegram return: {:?}", ret);
 
-        // 保存消息映射关系
+        // 保存消息映射关系以及建立消息索引
         for msg in ret.iter().flatten() {
+            if let Err(e) = bridge.index_message(msg).await {
+                tracing::warn!("Failed to index message: {}", e);
+            }
+
             if let Err(e) = bridge
                 .save_message_by_remote(remote_chat.id, &message.message_id, msg)
                 .await

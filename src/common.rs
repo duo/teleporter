@@ -28,8 +28,10 @@ pub struct TelegramConfig {
     pub api_hash: String,
     /// Telegram Bot token
     pub bot_token: String,
-    // socks5 proxy url
+    // Socks5 proxy url
     pub proxy_url: Option<String>,
+    // Enable search
+    pub enable_search: bool,
 }
 
 /// Onebot 配置

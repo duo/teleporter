@@ -1,6 +1,6 @@
 [package]
 name = "teleporter"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 
 [dependencies]
@@ -73,3 +73,9 @@ grammers-client = { git = "https://github.com/Lonami/grammers", default-features
     "html",
     "proxy",
 ] }
+tantivy = { version = "0.22.0", default-features = false, features = [
+    "mmap",
+    "stopwords",
+    "zstd-compression",
+] }
+tantivy-jieba = "0.11.0"

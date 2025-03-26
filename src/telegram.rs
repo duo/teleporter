@@ -3,6 +3,7 @@ mod command;
 mod entities;
 mod from_onebot;
 mod from_telegram;
+mod index_service;
 mod migration;
 mod onebot_helper;
 mod telegram_helper;
