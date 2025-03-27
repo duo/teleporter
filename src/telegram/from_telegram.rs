@@ -256,13 +256,18 @@ impl TelegramPylon {
                         }
                     }
                 }
+                media::Media::WebPage(_) => {
+                    // 带Preview的消息, 需要添加文本, 和其它媒体区分对待
+                    if !message.text().is_empty() {
+                        segments.push(Segment::Text(Segment::text(message.text().to_string())));
+                    }
+                }
                 _ => {
                     // TODO: add more media support
                 }
             }
-        }
-
-        if !message.text().is_empty() {
+        } else if !message.text().is_empty() {
+            // TODO: 暂时先不处理Telegram的媒体Caption
             segments.push(Segment::Text(Segment::text(message.text().to_string())));
         }
 

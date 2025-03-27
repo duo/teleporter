@@ -58,6 +58,10 @@ pub enum Request {
     #[serde(rename = "get_file")]
     GetFile { echo: String, params: GetFile },
 
+    /// 获取合并转发消息
+    #[serde(rename = "get_forward_msg")]
+    GetForwardMsg { echo: String, params: GetForwardMsg },
+
     /// 撤回消息
     #[serde(rename = "delete_msg")]
     DeleteMsg { echo: String, params: DeleteMsg },
@@ -131,6 +135,13 @@ pub struct GetFile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetForwardMsg {
+    /// 消息ID
+    #[serde(deserialize_with = "id_deserializer")]
+    pub message_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteMsg {
     /// 消息ID
     #[serde(deserialize_with = "id_deserializer")]
@@ -200,6 +211,7 @@ impl Request {
         GetRecord,
         GetImage,
         GetFile,
+        GetForwardMsg,
         DeleteMsg,
         SendMsg
     );
@@ -218,6 +230,7 @@ impl Request {
         (get_record, GetRecord),
         (get_image, GetImage),
         (get_file, GetFile),
+        (get_forward_msg, GetForwardMsg),
         (delete_msg, DeleteMsg),
         (send_msg, SendMsg)
     );

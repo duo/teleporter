@@ -30,11 +30,11 @@ use crate::common::{ChatType, DeliveryStatus, Endpoint, Platform, RemoteChatKey}
 use crate::onebot::onebot_pylon::OnebotPylon;
 use crate::onebot::protocol::OnebotRequest;
 use crate::onebot::protocol::request::{
-    DeleteMsg, GetFile, GetGroupInfo, GetGroupMemberInfo, GetGroupMemberList, GetImage, GetRecord,
-    GetStrangerInfo, Request, SendMsg,
+    DeleteMsg, GetFile, GetForwardMsg, GetGroupInfo, GetGroupMemberInfo, GetGroupMemberList,
+    GetImage, GetRecord, GetStrangerInfo, Request, SendMsg,
 };
 use crate::onebot::protocol::response::{
-    FileInfo, GroupInfo, MemberInfo, MessageId, ResponseData, UserInfo,
+    FileInfo, ForwardMessage, GroupInfo, MemberInfo, MessageId, ResponseData, UserInfo,
 };
 use crate::onebot::protocol::segment::Segment;
 
@@ -844,6 +844,7 @@ impl Bridge {
     onebot_api!(get_record, FileInfo, FileInfo, GetRecord, file: String, out_format: String);
     onebot_api!(get_image, FileInfo, FileInfo, GetImage, file: String, file_id: String, emoji_id: Option<String>);
     onebot_api!(get_file, FileInfo, FileInfo, GetFile, file: String, file_id: String);
+    onebot_api!(get_forward_msg, ForwardMessage, ForwardMessage, GetForwardMsg, message_id: String);
     onebot_api!(send_msg, MessageId, MessageId, SendMsg, message_type: String, group_id: Option<String>, user_id: Option<String>, message: Vec<Segment>);
     onebot_api_no_resp!(delete_msg, DeleteMsg, message_id: String);
 

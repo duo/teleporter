@@ -61,7 +61,7 @@ impl TelegramPylon {
         endpoint: &Endpoint,
         message: &MessageEvent,
     ) -> Result<()> {
-        tracing::info!("Received Onebot message: {:?}", message);
+        tracing::info!("Received Onebot message: {}", message);
 
         // 跳过空消息
         if message.message.is_empty() {
@@ -198,8 +198,16 @@ impl TelegramPylon {
                         reply_to = Some(entity.tg_msg_id);
                     }
                 }
-                Segment::Forward(_) => {
-                    content.push_str("[合并消息]");
+                Segment::Forward(seg) => {
+                    content.push_str("[合并消息]\n");
+                    for msg in &bridge
+                        .get_forward_msg(endpoint, seg.id.clone())
+                        .await?
+                        .messages
+                    {
+                        writeln!(&mut content, "{}", msg).unwrap();
+                    }
+                    content.pop();
                 }
                 Segment::Location(seg) => {
                     location = Some(InputMediaVenue {

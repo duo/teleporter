@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
-use super::id_deserializer;
+use super::{event::MessageEvent, id_deserializer};
 
 /// Onebot API 响应
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,6 +46,9 @@ pub enum ResponseData {
 
     /// get_image, get_record, get_file 响应数据
     FileInfo(Arc<FileInfo>),
+
+    /// get_forward_msg 响应数据
+    ForwardMessage(Arc<ForwardMessage>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,4 +139,10 @@ pub struct FileInfo {
     pub url: Option<String>,
     /// Base64编码的文件内容
     pub base64: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForwardMessage {
+    /// 消息列表
+    pub messages: Vec<MessageEvent>,
 }

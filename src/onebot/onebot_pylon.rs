@@ -22,12 +22,18 @@ use crate::onebot::protocol::event::{Event, LifecycleEvent, MetaEvent};
 type EndpointsSenderChannal = Arc<Mutex<HashMap<Endpoint, mpsc::Sender<Arc<Request>>>>>;
 type ResponsePendingChannal = Arc<Mutex<HashMap<String, oneshot::Sender<Result<Arc<Response>>>>>>;
 
+// 通道的缓冲区大小
+const BUFFER_SIZE: usize = 1024;
+// API调用超时时间
+const API_TIMOUT: u64 = 120;
+// WebSocket最大消息大小
 const WS_MAX_MESSAGE_SIZE: usize = 512 * 1024 * 1024;
+// WebSocket最大帧大小
 const WS_MAX_FRAME_SIZE: usize = 256 * 1024 * 1024;
 
 #[derive(Clone)]
 pub struct OnebotPylon {
-    // 监听地址WS_WS_WS_
+    // 监听地址
     addr: String,
     // 鉴权
     bearer: Option<String>,
@@ -119,7 +125,7 @@ impl OnebotPylon {
             return Err(anyhow::anyhow!("Failed to send request: {}", e));
         }
 
-        match tokio::time::timeout(Duration::from_secs(120), rx).await {
+        match tokio::time::timeout(Duration::from_secs(API_TIMOUT), rx).await {
             Ok(Ok(result)) => result,
             Ok(Err(e)) => Err(e.into()),
             Err(e) => Err(e.into()),
@@ -181,14 +187,19 @@ impl OnebotPylon {
                 .await
                 .expect("Error during the websocket handshake occurred");
 
-        tracing::info!("New Onebot client connection: {}", addr);
+        // 通过回调后获得端点
+        let endpoint = endpoint_locked.lock().unwrap().clone();
+
+        tracing::info!("New Onebot client ({}) connection: {}", endpoint, addr);
 
         let (mut write, mut read) = ws_stream.split();
 
         // 接收API请求
-        let (sender, mut receiver) = mpsc::channel(1024);
-        let endpoint = endpoint_locked.lock().unwrap().clone();
-        self.endpoints_sender.lock().await.insert(endpoint, sender);
+        let (sender, mut receiver) = mpsc::channel(BUFFER_SIZE);
+        self.endpoints_sender
+            .lock()
+            .await
+            .insert(endpoint.clone(), sender);
         tokio::spawn(async move {
             while let Some(req) = receiver.recv().await {
                 Self::handle_request(req, &mut write).await;
@@ -199,7 +210,6 @@ impl OnebotPylon {
         let sender = event_sender.clone();
         let endpoints_sender = self.endpoints_sender.clone();
         let pending = self.response_pending.clone();
-        let endpoint = endpoint_locked.lock().unwrap().clone();
         tokio::spawn(async move {
             while let Some(msg) = read.next().await {
                 match msg {
@@ -224,7 +234,7 @@ impl OnebotPylon {
                         }
 
                         endpoints_sender.lock().await.remove(&endpoint);
-                        tracing::warn!("Onebot client connection error: {}", e);
+                        tracing::warn!("Onebot client ({}) connection error: {}", endpoint, e);
                         break;
                     }
                 }
