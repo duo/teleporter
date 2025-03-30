@@ -258,6 +258,35 @@ pub struct Json {
     pub data: String,
 }
 
+impl std::fmt::Display for Segment {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Segment::Text(seg) => write!(f, "{}", seg.text),
+            Segment::Face(seg) => write!(f, "/[Face{}]", seg.id),
+            Segment::MarketFace(_) => write!(f, "[表情]"),
+            Segment::Image(_) => write!(f, "[图片]"),
+            Segment::Record(_) => write!(f, "[语音]"),
+            Segment::Video(_) => write!(f, "[视频]"),
+            Segment::File(_) => write!(f, "[文件]"),
+            Segment::At(seg) => write!(f, "@{}", seg.id),
+            Segment::Rps => write!(f, "[猜拳]"),
+            Segment::Dice => write!(f, "[掷骰子]"),
+            Segment::Shake => write!(f, "[窗口抖动]"),
+            Segment::Poke(_) => write!(f, "[戳一戳]"),
+            Segment::Anonymous => write!(f, "[匿名]"),
+            Segment::Share(share) => write!(f, "[{},{}]", share.title, share.url),
+            Segment::Contact(_) => write!(f, "[推荐]"),
+            Segment::Location(_) => write!(f, "[位置]"),
+            Segment::Music(_) => write!(f, "[音乐]"),
+            Segment::Reply(_) => write!(f, "[回复]"),
+            Segment::Forward(_) => write!(f, "[合并转发]"),
+            Segment::Node(_) => write!(f, "[合并转发节点]"),
+            Segment::Xml(_) => write!(f, "[XML]"),
+            Segment::Json(_) => write!(f, "[JSON]"),
+        }
+    }
+}
+
 macro_rules! segment_builder {
     ($fn_name: ident, $segment_type: tt) => {
         pub fn $fn_name() -> Segment {

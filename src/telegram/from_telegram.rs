@@ -298,6 +298,8 @@ impl TelegramPylon {
                 }
             }
 
+            let content: String = segments.iter().map(|segment| segment.to_string()).collect();
+
             match bridge
                 .send_msg(
                     &remote_chat.endpoint,
@@ -310,7 +312,12 @@ impl TelegramPylon {
             {
                 Ok(message_id) => {
                     bridge
-                        .save_message_by_remote(remote_chat.id, &message_id.message_id, message)
+                        .save_message_by_remote(
+                            remote_chat.id,
+                            &message_id.message_id,
+                            message,
+                            &content,
+                        )
                         .await?;
                 }
                 Err(e) => {

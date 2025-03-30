@@ -63,6 +63,7 @@ enum Message {
     TgMsgId,
     RemoteChatId,
     RemoteMsgId,
+    Content,
     DeliveryStatus,
     CreatedAt,
     UpdatedAt,
@@ -138,6 +139,7 @@ impl MigrationTrait for CreateTableMigration {
                     .col(integer(Message::TgMsgId))
                     .col(integer(Message::RemoteChatId))
                     .col(string(Message::RemoteMsgId))
+                    .col(string(Message::Content))
                     .col(integer(Message::DeliveryStatus))
                     .col(integer(Message::CreatedAt))
                     .col(integer(Message::UpdatedAt))

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fmt::Write;
 
 use serde::{Deserialize, Serialize};
 
@@ -106,35 +105,11 @@ impl MessageEvent {
 
 impl std::fmt::Display for MessageEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut content = String::new();
-        for segment in &self.message {
-            match segment {
-                Segment::Text(seg) => content.push_str(&seg.text),
-                Segment::Face(seg) => write!(&mut content, "/[Face{}]", seg.id).unwrap(),
-                Segment::MarketFace(_) => content.push_str("[表情]"),
-                Segment::Image(_) => content.push_str("[图片]"),
-                Segment::Record(_) => content.push_str("[语音]"),
-                Segment::Video(_) => content.push_str("[视频]"),
-                Segment::File(_) => content.push_str("[文件]"),
-                Segment::At(seg) => write!(&mut content, "@{}", seg.id).unwrap(),
-                Segment::Rps => content.push_str("[猜拳]"),
-                Segment::Dice => content.push_str("[掷骰子]"),
-                Segment::Shake => content.push_str("[窗口抖动]"),
-                Segment::Poke(_) => content.push_str("[戳一戳]"),
-                Segment::Anonymous => content.push_str("[匿名]"),
-                Segment::Share(share) => {
-                    write!(&mut content, "[{},{}]", share.title, share.url).unwrap()
-                }
-                Segment::Contact(_) => content.push_str("[推荐]"),
-                Segment::Location(_) => content.push_str("[位置]"),
-                Segment::Music(_) => content.push_str("[音乐]"),
-                Segment::Reply(_) => content.push_str("[回复]"),
-                Segment::Forward(_) => content.push_str("[合并转发]"),
-                Segment::Node(_) => content.push_str("[合并转发节点]"),
-                Segment::Xml(_) => content.push_str("[XML]"),
-                Segment::Json(_) => content.push_str("[JSON]"),
-            }
-        }
+        let content: String = self
+            .message
+            .iter()
+            .map(|segment| segment.to_string())
+            .collect();
         match &self.group_id {
             Some(group_id) => write!(
                 f,

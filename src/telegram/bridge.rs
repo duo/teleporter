@@ -667,12 +667,14 @@ impl Bridge {
         remote_chat_id: i64,
         remote_message_id: &str,
         telegram_message: &Message,
+        content: &str,
     ) -> Result<()> {
         let entity = entities::message::ActiveModel {
             tg_chat_id: Set(telegram_message.chat().id()),
             tg_msg_id: Set(telegram_message.id()),
             remote_chat_id: Set(remote_chat_id),
             remote_msg_id: Set(remote_message_id.to_owned()),
+            content: Set(content.to_owned()),
             delivery_status: Set(DeliveryStatus::Sent),
             ..Default::default()
         };

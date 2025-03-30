@@ -16,6 +16,7 @@ pub struct Model {
     pub tg_msg_id: i32,
     pub remote_chat_id: i64,
     pub remote_msg_id: String,
+    pub content: String,
     pub delivery_status: DeliveryStatus,
     pub created_at: i64,
     pub updated_at: i64,
