@@ -13,7 +13,7 @@ use tantivy::{
     },
     tokenizer::{LowerCaser, Stemmer, TextAnalyzer},
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use super::telegram_helper as tg_helper;
 
@@ -32,6 +32,7 @@ pub struct IndexService {
     reader: Arc<IndexReader>,
     query_parser: QueryParser,
     doc_sender: mpsc::Sender<TantivyDocument>,
+    commit_sender: mpsc::Sender<oneshot::Sender<()>>,
 }
 
 impl IndexService {
@@ -82,29 +83,44 @@ impl IndexService {
         let mut index_writer = index.writer(50_000_000)?;
 
         let (doc_sender, mut doc_receiver) = mpsc::channel(BUFFER_SIZE);
+        let (commit_sender, mut commit_receiver) =
+            mpsc::channel::<oneshot::Sender<()>>(BUFFER_SIZE);
 
         // 启动索引写入线程
         tokio::spawn(async move {
             let mut added_docs = 0;
             let mut commit_timestamp = std::time::Instant::now();
 
-            while let Some(doc) = doc_receiver.recv().await {
-                match index_writer.add_document(doc) {
-                    Ok(_) => {
-                        added_docs += 1;
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to add document to index: {}", e);
-                    }
-                }
+            loop {
+                tokio::select! {
+                    Some(doc) = doc_receiver.recv() =>{
+                        match index_writer.add_document(doc) {
+                            Ok(_) => {
+                                added_docs += 1;
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to add document to index: {}", e);
+                            }
+                        }
 
-                // 满足阈值就提交
-                if (added_docs > COMMIT_RATE) || (commit_timestamp.elapsed() > COMMIT_TIME) {
-                    if let Err(e) = index_writer.commit() {
-                        tracing::warn!("Failed to commit index: {}", e);
+                        // 满足阈值就提交
+                        if (added_docs > COMMIT_RATE) || (commit_timestamp.elapsed() > COMMIT_TIME) {
+                            if let Err(e) = index_writer.commit() {
+                                tracing::warn!("Failed to commit index: {}", e);
+                            }
+                            added_docs = 0;
+                            commit_timestamp = std::time::Instant::now();
+                        }
                     }
-                    added_docs = 0;
-                    commit_timestamp = std::time::Instant::now();
+                    Some(sender) = commit_receiver.recv() => {
+                        if let Err(e) = index_writer.commit() {
+                            tracing::warn!("Failed to commit index: {}", e);
+                        } else {
+                            tracing::info!("Index committed before shutdown");
+                        }
+                        let _ = sender.send(());
+                        break;
+                    }
                 }
             }
         });
@@ -114,6 +130,7 @@ impl IndexService {
             reader: Arc::new(index.reader()?),
             query_parser,
             doc_sender,
+            commit_sender,
         })
     }
 
@@ -227,5 +244,13 @@ impl IndexService {
         }
 
         Ok(result)
+    }
+
+    // 提交索引
+    pub async fn commit(&self) -> Result<()> {
+        let (sender, receiver) = oneshot::channel();
+        self.commit_sender.send(sender).await?;
+        receiver.await?;
+        Ok(())
     }
 }

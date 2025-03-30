@@ -744,6 +744,14 @@ impl Bridge {
         }
     }
 
+    pub async fn commit(&self) -> Result<()> {
+        if let Some(index) = &self.index {
+            index.commit().await?;
+        }
+
+        Ok(())
+    }
+
     async fn create_topic(
         &self,
         archive_id: i64,

@@ -2,7 +2,8 @@ mod common;
 mod onebot;
 mod telegram;
 
-use tokio::sync::mpsc;
+use tokio::signal;
+use tokio::sync::{broadcast, mpsc};
 use tracing::Level;
 use tracing_log::LogTracer;
 use tracing_subscriber::layer::SubscriberExt;
@@ -42,14 +43,51 @@ async fn main() {
 
     let (event_sender, event_receiver) = mpsc::channel(BUFFER_SIZE);
     let (api_sender, api_receiver) = mpsc::channel(BUFFER_SIZE);
+    let (shutdown_tx, _) = broadcast::channel(1);
+
+    // 处理退出信号
+    let telegram_shutdown_tx = shutdown_tx.clone();
+    let onebot_shutdown_tx = shutdown_tx.clone();
+    tokio::spawn(async move {
+        let ctrl_c = async {
+            signal::ctrl_c().await.expect("Failed to listen for ctrl+c");
+        };
+
+        #[cfg(unix)]
+        let terminate = async {
+            signal::unix::signal(signal::unix::SignalKind::terminate())
+                .expect("Failed to install SIGTERM handler")
+                .recv()
+                .await;
+        };
+
+        #[cfg(not(unix))]
+        let terminate = std::future::pending::<()>();
+
+        tokio::select! {
+            _ = ctrl_c => {
+                tracing::info!("Received ctrl+c signal");
+                let _ = shutdown_tx.send(());
+            }
+            _ = terminate => {
+                tracing::info!("Received SIGTERM signal");
+                let _ = shutdown_tx.send(());
+            }
+        }
+    });
 
     let telegram_handle = tokio::spawn(async move {
-        telegram_pylon.run(event_receiver, api_sender).await;
+        telegram_pylon
+            .run(event_receiver, api_sender, telegram_shutdown_tx.subscribe())
+            .await;
     });
 
     let onebot_handle = tokio::spawn(async move {
-        onebot_pylon.run(event_sender, api_receiver).await;
+        onebot_pylon
+            .run(event_sender, api_receiver, onebot_shutdown_tx.subscribe())
+            .await;
     });
 
     let _ = tokio::try_join!(telegram_handle, onebot_handle);
+    tracing::info!("Main components have completed shutdown...");
 }

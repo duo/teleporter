@@ -7,7 +7,7 @@ use grammers_client::session::Session;
 use grammers_client::{Client, Config, FixedReconnect, InitParams, InputMessage, Update};
 use sea_orm::{Database, DatabaseConnection};
 use sea_orm_migration::MigratorTrait;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 
 use crate::common::TelegramConfig;
 use crate::onebot::protocol::{OnebotEvent, OnebotRequest};
@@ -88,6 +88,7 @@ impl TelegramPylon {
         &self,
         mut event_receiver: mpsc::Receiver<OnebotEvent>,
         api_sender: mpsc::Sender<OnebotRequest>,
+        mut shutdown_rx: broadcast::Receiver<()>,
     ) {
         tracing::info!("TelegramPylon started");
 
@@ -104,22 +105,31 @@ impl TelegramPylon {
         let remote_id_lock: Arc<RemoteIdLock> = Arc::new(DashMap::new());
         let remote_id_lock_clone = remote_id_lock.clone();
         let bridge_clone = bridge.clone();
+        let mut event_shutdown_rx = shutdown_rx.resubscribe();
         let event_handle = tokio::spawn(async move {
-            while let Some(event) = event_receiver.recv().await {
-                let remote_chat_key = (
-                    event.endpoint.clone(),
-                    event.raw.get_chat_type(),
-                    event.raw.get_chat_id(),
-                );
-                let id_lock = remote_id_lock.clone();
-                let bridge = bridge_clone.clone();
-                tokio::spawn(async move {
-                    with_id_lock!(id_lock, remote_chat_key, {
-                        if let Err(e) = Self::handle_event(&bridge, event).await {
-                            tracing::warn!("Failed to handle Onebot event: {}", e);
-                        }
-                    });
-                });
+            loop {
+                tokio::select! {
+                    Some(event) = event_receiver.recv() => {
+                        let remote_chat_key = (
+                            event.endpoint.clone(),
+                            event.raw.get_chat_type(),
+                            event.raw.get_chat_id(),
+                        );
+                        let id_lock = remote_id_lock.clone();
+                        let bridge = bridge_clone.clone();
+                        tokio::spawn(async move {
+                            with_id_lock!(id_lock, remote_chat_key, {
+                                if let Err(e) = Self::handle_event(&bridge, event).await {
+                                    tracing::warn!("Failed to handle Onebot event: {}", e);
+                                }
+                            });
+                        });
+                    }
+                    Ok(_) = event_shutdown_rx.recv() => {
+                        tracing::info!("Shutting down TelegramPylon event handler");
+                        break;
+                    }
+                }
             }
         });
 
@@ -128,17 +138,29 @@ impl TelegramPylon {
         let bridge_clone = bridge.clone();
         let message_handle = tokio::spawn(async move {
             loop {
-                let bridge = bridge_clone.clone();
-                if let Err(e) =
-                    Self::handle_message(tg_id_lock.clone(), remote_id_lock_clone.clone(), bridge)
-                        .await
-                {
-                    tracing::warn!("Failed to handle Telegram message: {}", e);
+                tokio::select! {
+                    _ = async {
+                        if let Err(e) = Self::handle_message(
+                            tg_id_lock.clone(),
+                            remote_id_lock_clone.clone(),
+                            bridge_clone.clone(),
+                        ).await {
+                            tracing::warn!("Failed to handle Telegram message: {}", e);
+                        }
+                    } => {},
+                    Ok(_) = shutdown_rx.recv() => {
+                        tracing::info!("Shutting down TelegramPylon message handler");
+                        if let Err(e) = bridge_clone.commit().await {
+                            tracing::warn!("Failed to commit index: {}", e);
+                        }
+                        break;
+                    }
                 }
             }
         });
 
         let _ = tokio::try_join!(event_handle, message_handle);
+        tracing::info!("TelegramPylon shutdown complete");
     }
 
     async fn handle_message(

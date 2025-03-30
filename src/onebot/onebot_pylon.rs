@@ -6,7 +6,7 @@ use chrono::Utc;
 use futures_util::{SinkExt, StreamExt};
 use serde_json;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
 use tokio::time::Duration;
 use tokio_tungstenite::tungstenite::handshake::server::ErrorResponse;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
@@ -57,6 +57,7 @@ impl OnebotPylon {
         &self,
         event_sender: mpsc::Sender<OnebotEvent>,
         mut api_receiver: mpsc::Receiver<OnebotRequest>,
+        mut shutdown_rx: broadcast::Receiver<()>,
     ) {
         let try_socket = TcpListener::bind(&self.addr).await;
         let listener = try_socket.expect("Failed to bind");
@@ -65,48 +66,71 @@ impl OnebotPylon {
         // 将收到的API请求转发给对应端点
         let endpoints_sender = self.endpoints_sender.clone();
         let pending = self.response_pending.clone();
-        tokio::spawn(async move {
-            while let Some(req) = api_receiver.recv().await {
-                if let Some(sender) = endpoints_sender.lock().await.get(&req.endpoint) {
-                    let echo = req.raw.get_echo();
-                    pending.lock().await.insert(echo.clone(), req.ret);
-                    if let Err(e) = sender.send(req.raw).await {
-                        tracing::warn!("Failed to send request: {}", e);
-                        if let Err(e) = pending
-                            .lock()
-                            .await
-                            .remove(echo.as_str())
-                            .unwrap()
-                            .send(Err(e.into()))
+        let mut api_shutdown_rx = shutdown_rx.resubscribe();
+        let api_handle = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    Some(req) = api_receiver.recv() => {
+                        if let Some(sender) = endpoints_sender.lock().await.get(&req.endpoint) {
+                            let echo = req.raw.get_echo();
+                            pending.lock().await.insert(echo.clone(), req.ret);
+                            if let Err(e) = sender.send(req.raw).await {
+                                tracing::warn!("Failed to send request: {}", e);
+                                if let Err(e) = pending
+                                    .lock()
+                                    .await
+                                    .remove(echo.as_str())
+                                    .unwrap()
+                                    .send(Err(e.into()))
+                                {
+                                    tracing::warn!("Failed to send response: {:?}", e);
+                                }
+                            }
+                        } else if let Err(e) = req
+                            .ret
+                            .send(Err(anyhow::anyhow!("Client({}) not found", req.endpoint)))
                         {
                             tracing::warn!("Failed to send response: {:?}", e);
                         }
                     }
-                } else if let Err(e) = req
-                    .ret
-                    .send(Err(anyhow::anyhow!("Client({}) not found", req.endpoint)))
-                {
-                    tracing::warn!("Failed to send response: {:?}", e);
+                    Ok(_) = api_shutdown_rx.recv() => {
+                        tracing::info!("Shutting down OnebotPylon API handler");
+                        break;
+                    }
                 }
             }
         });
 
-        loop {
-            match listener.accept().await {
-                Ok((stream, _)) => {
-                    let event_sender_clone = event_sender.clone();
-                    let onebot_pylon = self.clone();
-                    tokio::spawn(async move {
-                        onebot_pylon
-                            .accept_connection(stream, event_sender_clone)
-                            .await;
-                    });
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to accept connection: {}", e);
+        let this = self.clone();
+        let accept_handle = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    accept_result = listener.accept() => {
+                        match accept_result {
+                            Ok((stream, _)) => {
+                                let event_sender_clone = event_sender.clone();
+                                let onebot_pylon = this.clone();
+                                tokio::spawn(async move {
+                                    onebot_pylon
+                                        .accept_connection(stream, event_sender_clone)
+                                        .await;
+                                });
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to accept connection: {}", e);
+                            }
+                        }
+                    }
+                    Ok(_) = shutdown_rx.recv() => {
+                        tracing::info!("Shutting down OnebotPylon connection acceptor");
+                        break;
+                    }
                 }
             }
-        }
+        });
+
+        let _ = tokio::try_join!(api_handle, accept_handle);
+        tracing::info!("OnebotPylon shutdown complete");
     }
 
     pub async fn call_api(
