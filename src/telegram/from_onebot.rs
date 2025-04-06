@@ -110,7 +110,9 @@ impl TelegramPylon {
                         content.push_str(ob_helper::replace_qq_face(&seg.id).as_str());
                     }
                     _ => {
-                        write!(&mut content, "/[Face{}]", seg.id).unwrap();
+                        content.push_str("/[Face");
+                        content.push_str(&seg.id);
+                        content.push(']');
                     }
                 },
                 Segment::At(seg) => {
@@ -124,10 +126,12 @@ impl TelegramPylon {
                         .await
                     {
                         Ok(member) => {
-                            write!(&mut content, "@{}", member.display_name()).unwrap();
+                            content.push('@');
+                            content.push_str(&member.display_name());
                         }
                         Err(_) => {
-                            write!(&mut content, "@{}", seg.id).unwrap();
+                            content.push('@');
+                            content.push_str(&seg.id);
                         }
                     }
                 }
@@ -263,12 +267,14 @@ impl TelegramPylon {
         let ret;
         match msg_type {
             TgMsgType::Text => {
-                write!(&mut title, "\n{}", &content).unwrap();
+                title.push('\n');
+                title.push_str(&content);
                 let message = InputMessage::text(title).reply_to(reply_to);
                 ret = vec![Some(bridge.send_telegram_message(&*chat, message).await?)];
             }
             TgMsgType::Html => {
-                write!(&mut title, "\n{}", &content).unwrap();
+                title.push('\n');
+                title.push_str(&content);
                 let message = InputMessage::html(title)
                     .reply_to(reply_to)
                     .link_preview(true);
@@ -278,7 +284,8 @@ impl TelegramPylon {
                 if media_uploaded.len() == 1 {
                     // 也是图文混合
                     if message.message.len() > 1 {
-                        write!(&mut title, "\n{}", &content).unwrap();
+                        title.push('\n');
+                        title.push_str(&content);
                     }
                     // TODO: 判断图片大小和尺寸决定发送图片还是文件
                     let media = media_uploaded.pop().unwrap();
@@ -307,7 +314,8 @@ impl TelegramPylon {
                     }
                     ret = vec![Some(bridge.send_telegram_message(&*chat, message).await?)];
                 } else {
-                    write!(&mut title, "\n{}", &content).unwrap();
+                    title.push('\n');
+                    title.push_str(&content);
                     ret = bridge
                         .send_telegram_album(
                             &*chat,

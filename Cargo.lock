@@ -2963,7 +2963,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3783,6 +3783,7 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 name = "teleporter"
 version = "0.0.3"
 dependencies = [
+ "aho-corasick",
  "anyhow",
  "base64",
  "chrono",
@@ -3797,6 +3798,7 @@ dependencies = [
  "html-escape",
  "image",
  "infer",
+ "lazy_static",
  "mime_guess",
  "percent-encoding",
  "phf",

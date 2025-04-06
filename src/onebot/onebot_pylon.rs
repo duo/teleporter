@@ -26,6 +26,8 @@ type ResponsePendingChannal = Arc<Mutex<HashMap<String, oneshot::Sender<Result<A
 const BUFFER_SIZE: usize = 1024;
 // API调用超时时间
 const API_TIMOUT: u64 = 120;
+// WebSocket读取缓冲区大小
+const WS_READ_BUFFER_SIZE: usize = 8 * 1024 * 1024;
 // WebSocket最大消息大小
 const WS_MAX_MESSAGE_SIZE: usize = 512 * 1024 * 1024;
 // WebSocket最大帧大小
@@ -203,6 +205,7 @@ impl OnebotPylon {
                 Ok(response)
             };
         let mut config = WebSocketConfig::default();
+        config.read_buffer_size = WS_READ_BUFFER_SIZE;
         config.max_message_size = Some(WS_MAX_MESSAGE_SIZE);
         config.max_frame_size = Some(WS_MAX_FRAME_SIZE);
 

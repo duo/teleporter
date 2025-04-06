@@ -261,28 +261,41 @@ pub struct Json {
 impl std::fmt::Display for Segment {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Segment::Text(seg) => write!(f, "{}", seg.text),
-            Segment::Face(seg) => write!(f, "/[Face{}]", seg.id),
-            Segment::MarketFace(_) => write!(f, "[表情]"),
-            Segment::Image(_) => write!(f, "[图片]"),
-            Segment::Record(_) => write!(f, "[语音]"),
-            Segment::Video(_) => write!(f, "[视频]"),
-            Segment::File(_) => write!(f, "[文件]"),
-            Segment::At(seg) => write!(f, "@{}", seg.id),
-            Segment::Rps => write!(f, "[猜拳]"),
-            Segment::Dice => write!(f, "[掷骰子]"),
-            Segment::Shake => write!(f, "[窗口抖动]"),
-            Segment::Poke(_) => write!(f, "[戳一戳]"),
-            Segment::Anonymous => write!(f, "[匿名]"),
-            Segment::Share(share) => write!(f, "[{},{}]", share.title, share.url),
-            Segment::Contact(_) => write!(f, "[推荐]"),
-            Segment::Location(_) => write!(f, "[位置]"),
-            Segment::Music(_) => write!(f, "[音乐]"),
-            Segment::Reply(_) => write!(f, "[回复]"),
-            Segment::Forward(_) => write!(f, "[合并转发]"),
-            Segment::Node(_) => write!(f, "[合并转发节点]"),
-            Segment::Xml(_) => write!(f, "[XML]"),
-            Segment::Json(_) => write!(f, "[JSON]"),
+            Segment::Text(seg) => f.write_str(&seg.text),
+            Segment::Face(seg) => {
+                f.write_str("/[Face")?;
+                f.write_str(&seg.id)?;
+                f.write_str("]")
+            }
+            Segment::MarketFace(_) => f.write_str("[表情]"),
+            Segment::Image(_) => f.write_str("[图片]"),
+            Segment::Record(_) => f.write_str("[语音]"),
+            Segment::Video(_) => f.write_str("[视频]"),
+            Segment::File(_) => f.write_str("[文件]"),
+            Segment::At(seg) => {
+                f.write_str("@")?;
+                f.write_str(&seg.id)
+            }
+            Segment::Rps => f.write_str("[猜拳]"),
+            Segment::Dice => f.write_str("[掷骰子]"),
+            Segment::Shake => f.write_str("[窗口抖动]"),
+            Segment::Poke(_) => f.write_str("[戳一戳]"),
+            Segment::Anonymous => f.write_str("[匿名]"),
+            Segment::Share(share) => {
+                f.write_str("[")?;
+                f.write_str(&share.title)?;
+                f.write_str(",")?;
+                f.write_str(&share.url)?;
+                f.write_str("]")
+            }
+            Segment::Contact(_) => f.write_str("[推荐]"),
+            Segment::Location(_) => f.write_str("[位置]"),
+            Segment::Music(_) => f.write_str("[音乐]"),
+            Segment::Reply(_) => f.write_str("[回复]"),
+            Segment::Forward(_) => f.write_str("[合并转发]"),
+            Segment::Node(_) => f.write_str("[合并转发节点]"),
+            Segment::Xml(_) => f.write_str("[XML]"),
+            Segment::Json(_) => f.write_str("[JSON]"),
         }
     }
 }

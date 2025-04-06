@@ -111,14 +111,18 @@ impl std::fmt::Display for MessageEvent {
             .map(|segment| segment.to_string())
             .collect();
         match &self.group_id {
-            Some(group_id) => write!(
-                f,
-                "{} [{}]: {}",
-                self.sender.display_name(),
-                group_id,
-                content
-            ),
-            None => write!(f, "{}: {}", self.sender.display_name(), content),
+            Some(group_id) => {
+                f.write_str(&self.sender.display_name())?;
+                f.write_str(" (")?;
+                f.write_str(group_id)?;
+                f.write_str("): ")?;
+                f.write_str(&content)
+            }
+            None => {
+                f.write_str(&self.sender.display_name())?;
+                f.write_str(": ")?;
+                f.write_str(&content)
+            }
         }
     }
 }

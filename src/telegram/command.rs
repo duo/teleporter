@@ -62,7 +62,7 @@ impl TelegramPylon {
                         "help - Show command list.\n\
                         link - Manage remote chat link.\n\
                         archive - Archive remote chat.\n\
-                        search - search messages.",
+                        search - Search messages.",
                     ))
                     .await?;
             }

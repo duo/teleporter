@@ -80,3 +80,5 @@ tantivy = { version = "0.22.0", default-features = false, features = [
     "zstd-compression",
 ] }
 tantivy-jieba = "0.11.0"
+aho-corasick = "1.1.3"
+lazy_static = "1.5.0"

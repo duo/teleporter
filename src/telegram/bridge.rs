@@ -88,6 +88,7 @@ pub struct Bridge {
     pub db: DatabaseConnection,
     index: Option<IndexService>,
     api_sender: mpsc::Sender<OnebotRequest>,
+    http_client: reqwest::Client,
 
     remote_chat_cache: DashMap<RemoteChatKey, Arc<ChatModel>>,
     callback_cache: DashMap<String, CommandCallback>,
@@ -294,6 +295,10 @@ impl Bridge {
             db,
             index,
             api_sender,
+            http_client: reqwest::Client::builder()
+                .user_agent(USER_AGENT)
+                .build()
+                .expect("Failed to create HTTP client"),
             remote_chat_cache: DashMap::new(),
             callback_cache: DashMap::new(),
             tg_chat_cache: DashMap::new(),
@@ -828,8 +833,7 @@ impl Bridge {
 
     async fn fetch_file(&self, url: &str) -> Result<(String, Vec<u8>)> {
         let url = Url::parse(url)?;
-        let client = reqwest::Client::builder().user_agent(USER_AGENT).build()?;
-        let response = client.get(url.as_str()).send().await?;
+        let response = self.http_client.get(url.as_str()).send().await?;
         let filename = get_final_filename(response.headers(), &url);
 
         Ok((filename, response.bytes().await?.to_vec()))

@@ -71,9 +71,9 @@ pub enum Platform {
 impl fmt::Display for Platform {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Platform::Telegram => write!(f, "telegram"),
-            Platform::QQ => write!(f, "qq"),
-            Platform::WeChat => write!(f, "wechat"),
+            Platform::Telegram => f.write_str("telegram"),
+            Platform::QQ => f.write_str("qq"),
+            Platform::WeChat => f.write_str("wechat"),
         }
     }
 }
@@ -108,7 +108,9 @@ impl Default for Endpoint {
 
 impl fmt::Display for Endpoint {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:{}", self.platform, self.id)
+        f.write_str(&self.platform.to_string())?;
+        f.write_str(":")?;
+        f.write_str(&self.id)
     }
 }
 
@@ -140,8 +142,8 @@ pub enum ChatType {
 impl fmt::Display for ChatType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ChatType::Private => write!(f, "private"),
-            ChatType::Group => write!(f, "group"),
+            ChatType::Private => f.write_str("private"),
+            ChatType::Group => f.write_str("group"),
         }
     }
 }
@@ -170,10 +172,10 @@ pub enum DeliveryStatus {
 impl fmt::Display for DeliveryStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DeliveryStatus::Pending => write!(f, "pending"),
-            DeliveryStatus::Failed => write!(f, "failed"),
-            DeliveryStatus::Sent => write!(f, "sent"),
-            DeliveryStatus::Recalled => write!(f, "recalled"),
+            DeliveryStatus::Pending => f.write_str("pending"),
+            DeliveryStatus::Failed => f.write_str("failed"),
+            DeliveryStatus::Sent => f.write_str("sent"),
+            DeliveryStatus::Recalled => f.write_str("recalled"),
         }
     }
 }
