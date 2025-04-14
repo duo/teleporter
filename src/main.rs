@@ -2,6 +2,8 @@ mod common;
 mod onebot;
 mod telegram;
 
+#[cfg(not(target_env = "msvc"))]
+use tikv_jemallocator::Jemalloc;
 use tokio::signal;
 use tokio::sync::{broadcast, mpsc};
 use tracing::Level;
@@ -12,6 +14,10 @@ use tracing_subscriber::{EnvFilter, fmt};
 use crate::common::TeleporterConfig;
 use crate::onebot::onebot_pylon::OnebotPylon;
 use crate::telegram::telegram_pylon::TelegramPylon;
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 const BUFFER_SIZE: usize = 1024;
 
